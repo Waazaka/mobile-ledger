@@ -5,7 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import crypto from 'node:crypto';
 
-const cwd=fs.mkdtempSync(path.join(os.tmpdir(),'ledger-m1-'));
+const cwd=fs.mkdtempSync(path.join(os.tmpdir(),'ledger-m1-'));fs.mkdirSync(path.join(cwd,'data'));fs.writeFileSync(path.join(cwd,'data','ledger.json'),JSON.stringify({accounts:[],providers:[{id:'legacy',name:'MiMo',baseUrl:{url:'https://api.xiaomimimo.com/v1'},model:'test-model',key:'encrypted-placeholder'}],imports:[],transactions:[]}));
 const port=21000+crypto.randomInt(10000), base=`http://127.0.0.1:${port}`;
 const env={...process.env,PORT:String(port),LEDGER_PASSWORD:'test-password',LEDGER_SESSION_SECRET:'s'.repeat(40),LEDGER_KEY_SECRET:'k'.repeat(40)};
 const child=spawn(process.execPath,[path.join(import.meta.dirname,'server.mjs')],{cwd,env,stdio:'ignore'});
@@ -14,7 +14,7 @@ async function request(route,body,token,method='POST'){let res=await fetch(base+
 try {
  let ready=false;for(let n=0;n<50;n++){try{await fetch(base);ready=true;break}catch{await wait(100)}}assert(ready,'server starts');const page=await (await fetch(base)).text(),client=page.slice(page.lastIndexOf('<script>')+8,page.lastIndexOf('</script>'));assert.doesNotThrow(()=>new Function(client),'embedded browser JavaScript parses');const app={};const rendered=new Function('localStorage','document',client+";state={accounts:[],providers:[],imports:[],transactions:[],matches:[],candidates:[],finance:{summary:{currencies:{}},accountBalances:{}}};render();return document.getElementById('app').innerHTML")({ledgerSession:''},{getElementById:()=>app});assert(rendered.includes('完整账单 CSV 复核')&&rendered.includes('备份与恢复'),'authenticated dashboard renders all sections');assert(page.includes('YOUR MONEY · YOURS ONLY')&&page.includes('.stats-grid')&&page.includes('backdrop-filter'),'redesigned visual system is served');
  let [r,d]=await request('/api/state',undefined);assert.equal(r.status,401,'API protected');
- [r,d]=await request('/api/login',{password:'test-password'});assert.equal(r.status,200);const token=d.token,today=new Date().toISOString().slice(0,10),yesterday=new Date(Date.now()-86400000).toISOString().slice(0,10);
+ [r,d]=await request('/api/login',{password:'test-password'});assert.equal(r.status,200);const token=d.token,today=new Date().toISOString().slice(0,10),yesterday=new Date(Date.now()-86400000).toISOString().slice(0,10);[r,d]=await request('/api/state',undefined,token,'GET');assert.equal(d.providers[0].baseUrl,'https://api.xiaomimimo.com/v1','legacy object URL normalized');assert.equal(d.providers[0].key,undefined,'provider key never returned');
  [r,d]=await request('/api/accounts',{name:'银行卡',type:'银行卡',openingBalance:'1000.00',asOf:yesterday},token);assert.equal(r.status,201);[r,d]=await request('/api/state',undefined,token,'GET');const accountId=d.accounts[0].id;
  const data='data:image/png;base64,aGVsbG8=';
  [r,d]=await request('/api/import',{imageData:data,mime:'image/png',source:'测试',anchor:today},token);assert.equal(r.status,200);const importId=d.id;
